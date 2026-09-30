@@ -1,51 +1,65 @@
 import json
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
+import requests
 import resend
-from tavily import TavilyClient
 
 
-def fetch_live_signals_via_tavily():
-  tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+def fetch_live_signals_via_rest():
+  tavily_key = os.getenv("TAVILY_API_KEY")
+  if not tavily_key:
+    print("TAVILY_API_KEY missing.")
+    return []
+
   queries = [
-# Kolkata - Commercial Leasing & Parks
+      # Original Core Queries
       "Kolkata office space lease commercial real estate",
       "Sector V Salt Lake Kolkata office leasing expansion",
-      "New Town Rajarhat Kolkata IT park office space",
-      "Kolkata corporate headquarters relocation new office",
-      # Kolkata - GCCs & Managed / Flex Spaces
       "Global Capability Center GCC Kolkata office setup",
-      "Kolkata managed office space launch provider",
-      "Kolkata coworking space expansion Awfis Smartworks Regus",
-      "Kolkata flex space operator corporate leasing",
-      "Kolkata IT ITeS office space demand",
-      "Kolkata office fit-out interior design contract announcement",
-      # North Eastern Region (NER) - Guwahati & Hubs
       "Guwahati office space lease commercial real estate",
-      "Guwahati managed office space coworking expansion",
-      "Assam corporate expansion office setup tech",
-      "North East India tech park office leasing business",
-      "Shillong Guwahati IT park business expansion office",
-      # Regional Hiring & Infrastructure Spikes
-      "Kolkata tech company hiring expansion office space",
-      "Guwahati enterprise tech center office opening",
-      "Kolkata commercial property development project lease",
-      "West Bengal corporate investment office expansion",
-      "NER regional business hub office leasing",
+      "Kolkata coworking space expansion Awfis Smartworks Regus",
+      # 10 Newly Added Expansion & CRE Queries
+      "New Town Rajarhat Kolkata commercial property lease",
+      "Kolkata IT park office space absorption demand",
+      "Kolkata enterprise tech hub office opening",
+      "Ballygunge Park Street Kolkata corporate office relocation",
+      "West Bengal industrial corridor office manufacturing setup",
+      "Guwahati Assam IT Park tech office lease",
+      "Shillong Meghalaya tech business park expansion",
+      "North East India startup incubator workspace setup",
+      "Kolkata flexible workspace managed office provider",
+      "Kolkata corporate interior fit-out contract announcement",
   ]
 
   collected_snippets = []
+  url = "https://api.tavily.com/search"
+
+  print(
+      f"--- Querying Tavily via REST API ({len(queries)} targeted queries)"
+      " ---"
+  )
+
   for query in queries:
+    payload = {
+        "api_key": tavily_key,
+        "query": query,
+        "search_depth": "basic",
+        "max_results": 1,
+    }
     try:
-      response = tavily.search(query=query, search_depth="basic", max_results=1)
-      for result in response.get("results", []):
-        snippet = (
-            f"Query: [{query}] | Title: {result.get('title')} - Content:"
-            f" {result.get('content')}"
-        )
-        collected_snippets.append(snippet)
+      # Strict 5-second timeout ensures it never hangs your workflow
+      response = requests.post(url, json=payload, timeout=5)
+      if response.status_code == 200:
+        data = response.json()
+        for result in data.get("results", []):
+          snippet = (
+              f"Query: [{query}] | Title: {result.get('title')} - Content:"
+              f" {result.get('content')}"
+          )
+          collected_snippets.append(snippet)
     except Exception as e:
-      print(f"Tavily search error for '{query}': {e}")
+      print(f"Skipping query '{query}' due to timeout/error: {e}")
+
   return list(set(collected_snippets))
 
 
@@ -53,10 +67,13 @@ def run_expansion_hunter():
   if not os.getenv("GEMINI_API_KEY"):
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-  llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
+  llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash-lite", temperature=0)
 
-  live_snippets = fetch_live_signals_via_tavily()
-  print(f"--- Fetched {len(live_snippets)} signals. Evaluating via Gemini ---")
+  live_snippets = fetch_live_signals_via_rest()
+  print(
+      f"--- Fetched {len(live_snippets)} signals successfully. Evaluating via"
+      " Gemini ---"
+  )
 
   hot_leads = []
   cold_signals = []
@@ -132,30 +149,22 @@ Text to analyze:
   else:
     html_body += "<p>No cold signals found today.</p>"
 
-  # Send Email via Resend API
   send_email_via_resend(html_body)
 
 
 def send_email_via_resend(html_content):
   resend.api_key = os.getenv("RESEND_API_KEY")
-
   if not resend.api_key:
     print("RESEND_API_KEY missing. Skipping email dispatch.")
     return
 
   try:
     params: resend.Emails.SendParams = {
-        # Note: Resend requires a verified sending domain,
-        # but you can test instantly using onboarding@resend.dev delivered to your verified Resend account email
         "from": "Expansion Hunter <onboarding@resend.dev>",
-        "to": [
-            os.getenv("EMAIL_RECIPIENT")
-            or "delivered@resend.dev"  # Fallback target
-        ],
+        "to": [os.getenv("EMAIL_RECIPIENT") or "delivered@resend.dev"],
         "subject": "🏢 CRE Expansion Briefing: Hot & Cold Leads",
         "html": html_content,
     }
-
     email = resend.Emails.send(params)
     print(f"Resend email dispatched successfully: {email}")
   except Exception as e:
