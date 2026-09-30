@@ -8,11 +8,30 @@ from tavily import TavilyClient
 def fetch_live_signals_via_tavily():
   tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
   queries = [
+# Kolkata - Commercial Leasing & Parks
       "Kolkata office space lease commercial real estate",
       "Sector V Salt Lake Kolkata office leasing expansion",
+      "New Town Rajarhat Kolkata IT park office space",
+      "Kolkata corporate headquarters relocation new office",
+      # Kolkata - GCCs & Managed / Flex Spaces
       "Global Capability Center GCC Kolkata office setup",
-      "Guwahati office space lease commercial real estate",
+      "Kolkata managed office space launch provider",
       "Kolkata coworking space expansion Awfis Smartworks Regus",
+      "Kolkata flex space operator corporate leasing",
+      "Kolkata IT ITeS office space demand",
+      "Kolkata office fit-out interior design contract announcement",
+      # North Eastern Region (NER) - Guwahati & Hubs
+      "Guwahati office space lease commercial real estate",
+      "Guwahati managed office space coworking expansion",
+      "Assam corporate expansion office setup tech",
+      "North East India tech park office leasing business",
+      "Shillong Guwahati IT park business expansion office",
+      # Regional Hiring & Infrastructure Spikes
+      "Kolkata tech company hiring expansion office space",
+      "Guwahati enterprise tech center office opening",
+      "Kolkata commercial property development project lease",
+      "West Bengal corporate investment office expansion",
+      "NER regional business hub office leasing",
   ]
 
   collected_snippets = []
@@ -34,7 +53,7 @@ def run_expansion_hunter():
   if not os.getenv("GEMINI_API_KEY"):
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-  llm = ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0)
+  llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
 
   live_snippets = fetch_live_signals_via_tavily()
   print(f"--- Fetched {len(live_snippets)} signals. Evaluating via Gemini ---")
