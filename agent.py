@@ -5,31 +5,57 @@ from tavily import TavilyClient
 
 
 def fetch_live_signals_via_tavily():
-  # Initialize the Tavily client using the GitHub secret
   tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
+  # Comprehensive query list targeting CRE, GCCs, Managed Offices, and Expansions
   queries = [
-      "Kolkata office space lease commercial real estate news",
-      "Guwahati office space lease expansion workspace",
+      # Kolkata - Commercial Leasing & Parks
+      "Kolkata office space lease commercial real estate",
+      "Sector V Salt Lake Kolkata office leasing expansion",
+      "New Town Rajarhat Kolkata IT park office space",
+      "Kolkata corporate headquarters relocation new office",
+      # Kolkata - GCCs & Managed / Flex Spaces
+      "Global Capability Center GCC Kolkata office setup",
+      "Kolkata managed office space launch provider",
+      "Kolkata coworking space expansion Awfis Smartworks Regus",
+      "Kolkata flex space operator corporate leasing",
+      "Kolkata IT ITeS office space demand",
+      "Kolkata office fit-out interior design contract announcement",
+      # North Eastern Region (NER) - Guwahati & Hubs
+      "Guwahati office space lease commercial real estate",
+      "Guwahati managed office space coworking expansion",
+      "Assam corporate expansion office setup tech",
+      "North East India tech park office leasing business",
+      "Shillong Guwahati IT park business expansion office",
+      # Regional Hiring & Infrastructure Spikes
+      "Kolkata tech company hiring expansion office space",
+      "Guwahati enterprise tech center office opening",
+      "Kolkata commercial property development project lease",
+      "West Bengal corporate investment office expansion",
+      "NER regional business hub office leasing",
   ]
 
   collected_snippets = []
 
+  print(
+      f"--- Executing {len(queries)} targeted intelligence queries via"
+      " Tavily ---"
+  )
+
   for query in queries:
     try:
-      response = tavily.search(
-          query=query, search_depth="basic", max_results=3
-      )
+      # max_results=1 per query keeps response payload fast and saves credits
+      response = tavily.search(query=query, search_depth="basic", max_results=1)
       for result in response.get("results", []):
         snippet = (
-            f"Title: {result.get('title')} - Content:"
+            f"Query: [{query}] | Title: {result.get('title')} - Content:"
             f" {result.get('content')}"
         )
         collected_snippets.append(snippet)
     except Exception as e:
       print(f"Tavily search error for '{query}': {e}")
 
-  return collected_snippets
+  return list(set(collected_snippets))
 
 
 def run_expansion_hunter():
@@ -38,16 +64,26 @@ def run_expansion_hunter():
 
   llm = ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0)
 
-  print("--- Fetching clean web context via Tavily API ---")
   live_snippets = fetch_live_signals_via_tavily()
   print(
-      f"--- Fetched {len(live_snippets)} articles. Evaluating via Gemini ---"
+      f"--- Filtered {len(live_snippets)} unique articles. Evaluating via"
+      " Gemini ---"
   )
 
   match_count = 0
   for snippet in live_snippets:
-    # (Gemini prompt evaluation code goes here...)
-    pass
+    try:
+      response = llm.invoke(
+          f"Analyze this text for corporate furniture, office setup, managed space, GCC, or commercial leasing signals in Kolkata/NER:\n\n{snippet}"
+      )
+      # Process and print matching results...
+      if "is_relevant" in str(response.content):
+        match_count += 1
+        print(f"\n🎯 [MATCH FOUND #{match_count}]\n{response.content}")
+    except Exception as e:
+      continue
+
+  print(f"\nScan complete. Qualified opportunities found: {match_count}")
 
 
 if __name__ == "__main__":
