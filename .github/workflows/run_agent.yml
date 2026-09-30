@@ -1,9 +1,9 @@
-name: NER Expansion Hunter Agent
+name: Run Expansion Hunter Agent
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: '0 2 * * *' # Runs daily at 8:00 AM UTC
-  workflow_dispatch: # Allows you to run it manually from the GitHub UI anytime
+    - cron: '0 2 * * *' # Runs every day at 2:00 AM UTC
 
 jobs:
   run-agent:
@@ -19,12 +19,12 @@ jobs:
           cache: 'pip'
 
       - name: Install Dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run Agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          python agent.py
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+        run: python agent.py
