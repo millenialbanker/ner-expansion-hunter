@@ -1,0 +1,30 @@
+name: NER Expansion Hunter Agent
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # Runs daily at 8:00 AM UTC
+  workflow_dispatch: # Allows you to run it manually from the GitHub UI anytime
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python agent.py
