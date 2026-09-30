@@ -9,7 +9,7 @@ def run_expansion_hunter():
   if not os.getenv("GEMINI_API_KEY"):
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-  # Initialize Gemini
+  # Initialize Gemini with the active model
   llm = ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0)
 
   prompt = ChatPromptTemplate.from_messages([
@@ -30,7 +30,7 @@ Return a clean JSON object with the following fields:
 
   chain = prompt | llm
 
-  # TODO: Replace this list with your live news scraping / RSS feed ingestion logic
+  # Sample news feed for Kolkata & NER signals
   sample_news_feed = [
       (
           "TechCorp Solutions just signed a lease for 40,000 square feet of office"
@@ -46,10 +46,23 @@ Return a clean JSON object with the following fields:
 
   for snippet in sample_news_feed:
     response = chain.invoke({"text_snippet": snippet})
-    content = (
-        response.content.replace("```json", "").replace("```", "").strip()
+
+    # Safely extract text content whether it's returned as a string or list
+    raw_content = response.content
+    if isinstance(raw_content, list):
+      text_content = "".join(
+          [
+              item.get("text", "") if isinstance(item, dict) else str(item)
+              for item in raw_content
+          ]
+      )
+    else:
+      text_content = str(raw_content)
+
+    cleaned_content = (
+        text_content.replace("```json", "").replace("```", "").strip()
     )
-    result = json.loads(content)
+    result = json.loads(cleaned_content)
 
     if result.get("is_relevant"):
       print(
@@ -59,7 +72,6 @@ Return a clean JSON object with the following fields:
       print(f"Trigger: {result['trigger_type']} | Scale:"
             f" {result['estimated_scale']}")
       print(f"Summary: {result['summary']}")
-      # TODO: Add code here to push to HubSpot, Slack webhook, or send an email
 
 
 if __name__ == "__main__":
