@@ -10,7 +10,7 @@ def run_expansion_hunter():
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
   # Initialize Gemini
-  llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+  llm = ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0)
 
   prompt = ChatPromptTemplate.from_messages([
       (
