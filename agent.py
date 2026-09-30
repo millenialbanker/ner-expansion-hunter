@@ -67,7 +67,7 @@ def run_expansion_hunter():
   if not os.getenv("GEMINI_API_KEY"):
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-  llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash-lite", temperature=0)
+  llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
 
   live_snippets = fetch_live_signals_via_rest()
   print(
