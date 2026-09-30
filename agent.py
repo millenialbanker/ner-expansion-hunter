@@ -1,50 +1,23 @@
 import json
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
+import resend
 from tavily import TavilyClient
 
 
 def fetch_live_signals_via_tavily():
   tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
-
-  # Comprehensive query list targeting CRE, GCCs, Managed Offices, and Expansions
   queries = [
-      # Kolkata - Commercial Leasing & Parks
       "Kolkata office space lease commercial real estate",
       "Sector V Salt Lake Kolkata office leasing expansion",
-      "New Town Rajarhat Kolkata IT park office space",
-      "Kolkata corporate headquarters relocation new office",
-      # Kolkata - GCCs & Managed / Flex Spaces
       "Global Capability Center GCC Kolkata office setup",
-      "Kolkata managed office space launch provider",
-      "Kolkata coworking space expansion Awfis Smartworks Regus",
-      "Kolkata flex space operator corporate leasing",
-      "Kolkata IT ITeS office space demand",
-      "Kolkata office fit-out interior design contract announcement",
-      # North Eastern Region (NER) - Guwahati & Hubs
       "Guwahati office space lease commercial real estate",
-      "Guwahati managed office space coworking expansion",
-      "Assam corporate expansion office setup tech",
-      "North East India tech park office leasing business",
-      "Shillong Guwahati IT park business expansion office",
-      # Regional Hiring & Infrastructure Spikes
-      "Kolkata tech company hiring expansion office space",
-      "Guwahati enterprise tech center office opening",
-      "Kolkata commercial property development project lease",
-      "West Bengal corporate investment office expansion",
-      "NER regional business hub office leasing",
+      "Kolkata coworking space expansion Awfis Smartworks Regus",
   ]
 
   collected_snippets = []
-
-  print(
-      f"--- Executing {len(queries)} targeted intelligence queries via"
-      " Tavily ---"
-  )
-
   for query in queries:
     try:
-      # max_results=1 per query keeps response payload fast and saves credits
       response = tavily.search(query=query, search_depth="basic", max_results=1)
       for result in response.get("results", []):
         snippet = (
@@ -54,7 +27,6 @@ def fetch_live_signals_via_tavily():
         collected_snippets.append(snippet)
     except Exception as e:
       print(f"Tavily search error for '{query}': {e}")
-
   return list(set(collected_snippets))
 
 
@@ -65,25 +37,110 @@ def run_expansion_hunter():
   llm = ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0)
 
   live_snippets = fetch_live_signals_via_tavily()
-  print(
-      f"--- Filtered {len(live_snippets)} unique articles. Evaluating via"
-      " Gemini ---"
-  )
+  print(f"--- Fetched {len(live_snippets)} signals. Evaluating via Gemini ---")
 
-  match_count = 0
+  hot_leads = []
+  cold_signals = []
+
   for snippet in live_snippets:
+    prompt = f"""You are an elite B2B Commercial Real Estate intelligence agent focused on Kolkata and the North Eastern Region (NER) of India.
+Analyze this text for corporate furniture, office setup, managed space, GCC, or commercial leasing signals.
+Return a clean JSON object with the following fields:
+- "is_relevant": true/false
+- "urgency": "hot" (if large scale lease, GCC setup, or active move) or "cold" (if minor regional branch or early rumor)
+- "company_name": string or null
+- "region_hub": string or null
+- "trigger_type": string or null
+- "estimated_scale": string or null
+- "summary": brief description
+
+Text to analyze:
+{snippet}"""
+
     try:
-      response = llm.invoke(
-          f"Analyze this text for corporate furniture, office setup, managed space, GCC, or commercial leasing signals in Kolkata/NER:\n\n{snippet}"
+      response = llm.invoke(prompt)
+      raw_content = response.content
+      if isinstance(raw_content, list):
+        text_content = "".join(
+            [
+                item.get("text", "") if isinstance(item, dict) else str(item)
+                for item in raw_content
+            ]
+        )
+      else:
+        text_content = str(raw_content)
+
+      cleaned_content = (
+          text_content.replace("```json", "").replace("```", "").strip()
       )
-      # Process and print matching results...
-      if "is_relevant" in str(response.content):
-        match_count += 1
-        print(f"\n🎯 [MATCH FOUND #{match_count}]\n{response.content}")
+      result = json.loads(cleaned_content)
+
+      if result.get("is_relevant"):
+        if result.get("urgency") == "hot":
+          hot_leads.append(result)
+        else:
+          cold_signals.append(result)
     except Exception as e:
+      print(f"Parsing error: {e}")
       continue
 
-  print(f"\nScan complete. Qualified opportunities found: {match_count}")
+  # Build Email HTML Body
+  html_body = "<h2>🎯 Expansion Hunter Daily Intelligence Report</h2>"
+
+  html_body += "<h3>🔥 Hot Leads (Immediate Action)</h3>"
+  if hot_leads:
+    for lead in hot_leads:
+      html_body += f"""
+            <div style="border-left: 4px solid #ff4d4d; padding-left: 10px; margin-bottom: 15px;">
+                <b>Company:</b> {lead.get('company_name')}<br>
+                <b>Region Hub:</b> {lead.get('region_hub')}<br>
+                <b>Trigger:</b> {lead.get('trigger_type')} ({lead.get('estimated_scale')})<br>
+                <b>Summary:</b> {lead.get('summary')}
+            </div>"""
+  else:
+    html_body += "<p>No hot leads found in today's scan.</p>"
+
+  html_body += "<h3>❄️ Cold Signals (Early Watchlist)</h3>"
+  if cold_signals:
+    for signal in cold_signals:
+      html_body += f"""
+            <div style="border-left: 4px solid #4da6ff; padding-left: 10px; margin-bottom: 15px;">
+                <b>Company:</b> {signal.get('company_name')}<br>
+                <b>Region Hub:</b> {signal.get('region_hub')}<br>
+                <b>Trigger:</b> {signal.get('trigger_type')}<br>
+                <b>Summary:</b> {signal.get('summary')}
+            </div>"""
+  else:
+    html_body += "<p>No cold signals found today.</p>"
+
+  # Send Email via Resend API
+  send_email_via_resend(html_body)
+
+
+def send_email_via_resend(html_content):
+  resend.api_key = os.getenv("RESEND_API_KEY")
+
+  if not resend.api_key:
+    print("RESEND_API_KEY missing. Skipping email dispatch.")
+    return
+
+  try:
+    params: resend.Emails.SendParams = {
+        # Note: Resend requires a verified sending domain,
+        # but you can test instantly using onboarding@resend.dev delivered to your verified Resend account email
+        "from": "Expansion Hunter <onboarding@resend.dev>",
+        "to": [
+            os.getenv("EMAIL_RECIPIENT")
+            or "delivered@resend.dev"  # Fallback target
+        ],
+        "subject": "🏢 CRE Expansion Briefing: Hot & Cold Leads",
+        "html": html_content,
+    }
+
+    email = resend.Emails.send(params)
+    print(f"Resend email dispatched successfully: {email}")
+  except Exception as e:
+    print(f"Failed to send email via Resend: {e}")
 
 
 if __name__ == "__main__":
